@@ -3,11 +3,10 @@ import numpy as np
 import torch
 from numpy import ndarray
 from torch.optim import Adam
-import warnings
 from Utils.lbfgsb_scipy import LBFGSBScipy
+
 from Model.MargModel import Marg_model
 
-warnings.filterwarnings("ignore")
 
 def local_score_marg_lbfgsb(Data: ndarray, Xi: int, PAi: List[int], param = None):
     var_idx = param['var_idx']
@@ -34,7 +33,7 @@ def local_score_marg_lbfgsb(Data: ndarray, Xi: int, PAi: List[int], param = None
         param['pa_list'] = [[0]]
 
 
-    local_score_model = Marg_model(PA, X, param).to(param['device'])
+    local_score_model = Marg_model(PA, X, param)
 
     # Adam
     if param['optim'] == 'adam':

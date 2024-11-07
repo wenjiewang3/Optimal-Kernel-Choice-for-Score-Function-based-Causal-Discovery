@@ -3,13 +3,13 @@ import numpy as np
 import torch
 from numpy import ndarray
 from torch.optim import Adam
-from Model.MIModel import MIModel
 from Utils.lbfgsb_scipy import LBFGSBScipy
-import warnings
-warnings.filterwarnings("ignore")
+from Model.MIModel import MIModel
 
 def local_score_mi_lbfgsb(Data: ndarray, Xi: int, PAi: List[int], param = None):
     var_idx = param['var_idx']
+    # print(var_idx)
+    # print(Data.shape, Xi)
     X = torch.tensor(Data[:, var_idx[Xi]])
     if len(PAi):
         pa_ids_list = []
@@ -32,14 +32,11 @@ def local_score_mi_lbfgsb(Data: ndarray, Xi: int, PAi: List[int], param = None):
         PA = torch.tensor(np.zeros((Data.shape[0], 1)))
         param['pa_list'] = [[0]]
 
-
-    local_score_model = MIModel(PA, X, param).to(param['device'])
+    local_score_model = MIModel(PA, X, param)
 
     # Adam
     if param['optim'] == 'adam':
         optim = Adam(local_score_model.parameters(), lr=0.005)
-        # from torch.optim import SGD
-        # optim = SGD(general_score_model.parameters(), lr=1e-5)
         for i in range(param['epochs']):
             d_train = local_score_model.train_step(PA, X, optim)
 
