@@ -19,8 +19,6 @@ class Marg_model(nn.Module):
         self.PAlength_scale_ = nn.Parameter(torch.tensor(PAkernel_width).to(self.device))
         self.PAlength_scale_.requires_grad = True
 
-        self.amp = 1
-
         self.noise_scale_ = nn.Parameter(torch.tensor(noise_scale).to(self.device))
         self.noise_scale_.requires_grad = True
 
@@ -74,7 +72,7 @@ class Marg_model(nn.Module):
         """should be called before forward() call.
         X: training input data point. N x D tensor for the data dimensionality D.
         y: training target data point. N x 1 tensor."""
-        D = PA.shape[1]
+        N = PA.shape[0]
         Kpa = self.cal_PAkernel(PA)
         KX = self.Xkernel(X)
 
@@ -82,8 +80,7 @@ class Marg_model(nn.Module):
         alpha = torch.linalg.solve(L.T, torch.linalg.solve(L, KX))
 
         marginal_likelihood = (-0.5 * torch.trace(KX.mm(alpha))
-                               - D*torch.log(torch.diag(L)).sum()
-                               - D*D * 0.5 * np.log(2 * np.pi))
+                               - N*torch.log(torch.diag(L)).sum() - N*N * 0.5 * np.log(2 * np.pi))
 
         self.PA = PA
         self.X = X
@@ -91,19 +88,21 @@ class Marg_model(nn.Module):
         self.alpha = alpha
         self.Kpa = Kpa
         self.KX = KX
-        Score = -marginal_likelihood.sum()
-        self.score = Score.detach().item()
-        return Score
+        # Score = -marginal_likelihood.sum()
+        # self.score = Score.detach().item()
+        # return Score
+
+        self.score = -marginal_likelihood.detach().numpy()
+        return marginal_likelihood.sum()
 
     def cal_PAkernel(self, PA):
-
         if self.PAlength_scale_.requires_grad:
             length_scale = self.PAlength_scale_.data
-            length_scale = length_scale.clamp_(0.5, 5)
+            length_scale = length_scale.clamp_(0.1, 10)
             self.PAlength_scale_.data = length_scale
 
         noise_scale = self.noise_scale_.data
-        noise_scale = noise_scale.clamp_(1e-2, 1)
+        noise_scale = noise_scale.clamp_(1e-3, 1)
         self.noise_scale_.data = noise_scale
 
 
@@ -138,8 +137,6 @@ class Marg_model(nn.Module):
         """gradient-based optimization of hyperparameters
         opt: torch.optim.Optimizer object."""
         # range
-        PA = PA.to(self.device)
-        x = x.to(self.device)
         opt.zero_grad()
         nll = -self.fit(PA, x)
         nll.backward()

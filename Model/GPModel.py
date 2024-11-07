@@ -43,14 +43,14 @@ class GPmodel(nn.Module):
         X = X.float()
         y = y.float()
 
-        D = X.shape[1]
+        N = X.shape[0]
         K = self.kernel_mat_self(X)
         L = torch.linalg.cholesky(K)
         alpha = torch.linalg.solve(L.T, torch.linalg.solve(L, y))
         marginal_likelihood = (
             -0.5 * torch.trace(y.T.mm(alpha))
-            - D*torch.log(torch.diag(L)).sum()
-            - D*D * 0.5 * np.log(2 * np.pi)
+            - N*torch.log(torch.diag(L)).sum()
+            - N*N * 0.5 * np.log(2 * np.pi)
         )
 
         self.X = X

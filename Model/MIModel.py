@@ -8,23 +8,21 @@ class MIModel(nn.Module):
         self.param = param
         self.device = param['device']
         self.Xinit = param.get('width_init')
+        self.threshold = param['threshold']
 
         self.n = PA.shape[0]
         self.pa_list = param['pa_list']
-        self.threshold = param['threshold']
-        self.amp = 1
-
 
         PAkernel_width = self.MultiKernelInit_multi(PA, self.pa_list)
         Xkernel_width = self.Onekernel_median(X, self.Xinit)
 
-        self.PAlength_scale_ = nn.Parameter(torch.tensor(PAkernel_width))
+        self.PAlength_scale_ = nn.Parameter(torch.tensor(PAkernel_width).to(self.device))
         self.PAlength_scale_.requires_grad = True
 
-        self.noise_scale_ = nn.Parameter(torch.tensor(noise_scale))
+        self.noise_scale_ = nn.Parameter(torch.tensor(noise_scale).to(self.device))
         self.noise_scale_.requires_grad = True
 
-        self.Xlength_scale_ = nn.Parameter(torch.tensor(Xkernel_width))
+        self.Xlength_scale_ = nn.Parameter(torch.tensor(Xkernel_width).to(self.device))
         self.Xlength_scale_.requires_grad = True
         self.score = 1e5
 
@@ -62,7 +60,7 @@ class MIModel(nn.Module):
         dists = np.reshape(dists, (T**2, 1))
         width = np.sqrt(0.5 * np.median(dists[np.where(dists > 0)], axis=1)[0, 0])
         width = width * 2.5  # kernel width
-        return width#/X.shape[-1]
+        return width
 
     def predict(self, PA):
         """compute prediction. fit() must have been called.
@@ -75,13 +73,13 @@ class MIModel(nn.Module):
     def cal_PAkernel(self, PA):
         if self.PAlength_scale_.requires_grad:
             length_scale = self.PAlength_scale_.data
-            length_scale = length_scale.clamp_(0.5, 5)
+            length_scale = length_scale.clamp_(0.2, 5)
             self.PAlength_scale_.data = length_scale
 
         if self.Xlength_scale_.requires_grad:
             # print("Xgrad: ", self.Xlength_scale_.grad)
             xlength_scale = self.Xlength_scale_.data
-            xlength_scale = xlength_scale.clamp_(0.5, 5)
+            xlength_scale = xlength_scale.clamp_(0.2, 5)
             self.Xlength_scale_.data = xlength_scale
 
         if self.noise_scale_.requires_grad:
@@ -106,11 +104,11 @@ class MIModel(nn.Module):
             PAt = PA[:, pa_list[i]]
             PAt = PAt/self.PAlength_scale_[i]
             PAtsq = (PAt ** 2).sum(dim=1, keepdim=True)
-            dist_i = PAtsq + PAtsq.T - 2 * PAt.mm(PAt.T)
+            temp_dist = PAtsq + PAtsq.T - 2 * PAt.mm(PAt.T)
             if i == 0:
-                sqdist = dist_i
+                sqdist = temp_dist
             else:
-                sqdist += dist_i
+                sqdist += temp_dist
 
         Kpa = torch.exp(-0.5*sqdist)
         return Kpa
@@ -162,17 +160,14 @@ class MIModel(nn.Module):
         Kx = torch.unsqueeze(Kx, dim=2)
         driv_mat = torch.mul(dist, Kx)
         driv_mat = torch.sum(driv_mat**2, dim=2)
-
-        nonZerosIdx = driv_mat > 1e-3
-        driv_mat = driv_mat[nonZerosIdx]
-        driv_mat = torch.sqrt(driv_mat)
-
-        nonZerosIdx = driv_mat > 1e-3
-        driv_mat = driv_mat[nonZerosIdx]
-        weight = torch.tensor(self.n**2)/torch.tensor(driv_mat.size())
-
+        nonZerosIdx = driv_mat > self.threshold
+        driv_mat = torch.sqrt(driv_mat[nonZerosIdx])
         log_deriv_diag = torch.log(driv_mat)
-        driv_score = torch.sum(log_deriv_diag)*weight.to(self.device)
+
+        # nonZerosIdx = driv_mat > self.threshold
+        # driv_mat = driv_mat[nonZerosIdx]
+        weight = torch.tensor(self.n**2)/torch.tensor(driv_mat.size())
+        driv_score = torch.sum(log_deriv_diag)*weight
         return driv_score / n
 
 
@@ -191,7 +186,7 @@ class MIModel(nn.Module):
         driv_term2 = self.multi_Jacobian(y)/n
         driv_term = driv_term2
         nll = -(marginal_likelihood + driv_term)
-        self.score = nll.cpu().detach().numpy()
+        self.score = nll.detach().numpy()
         return nll, marginal_likelihood, driv_term
 
     def train_step(self, x, y, opt):
