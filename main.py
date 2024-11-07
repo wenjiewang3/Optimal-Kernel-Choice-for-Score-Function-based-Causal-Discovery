@@ -36,7 +36,7 @@ def main(opt):
 
     assert opt.data_type in ['con', 'dis', 'mix', 'multi'], print("data type not implemented")
     Data_dir = graph_generate(data_nums=opt.n,  variable_nums=6, graph_density=opt.gd,
-                              seeds=opt.seed, max_dim=1 if opt.data_type == "multi" else 1)
+                              seeds=opt.seed, max_dim=4 if opt.data_type == "multi" else 1)
     if opt.data_type == 'dis':
         Data_dir['data_mat'] = Continuous2Discrete(Data_dir)
     if opt.data_type == 'mix':
@@ -49,7 +49,7 @@ def main(opt):
     Gt = Data_dir['G']
     print("truth graph")
     print(Gt)
-    assert opt.score in ['CV', 'Marg', 'MI', 'GP']
+    assert opt.score in ['Marg', 'MI', 'GP']
     if opt.score == 'Marg':
         Record = ges(Data_dir, 'local_score_Marg',  parameters=parameters)
     elif opt.score == "GP":
